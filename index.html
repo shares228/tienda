@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Facturación con Lector QR — Tienda Doña María</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f4f6f9; color: #333; padding: 20px; }
+  .container { max-width: 1000px; margin: auto; }
+
+  header {
+    background: linear-gradient(135deg, #2c3e50, #3498db);
+    color: white; padding: 20px; border-radius: 10px 10px 0 0;
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+  }
+  header h1 { font-size: 1.3rem; }
+  header small { opacity: .85; }
+
+  .card { background: white; padding: 20px; margin-bottom: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+  .card h2 { font-size: 1.05rem; margin-bottom: 15px; color: #2c3e50; border-left: 4px solid #3498db; padding-left: 10px; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
+  @media (max-width: 700px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+  label { display: block; font-size: .85rem; margin-bottom: 4px; color: #555; font-weight: 600; }
+  input, select, textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid #ccc;
+    border-radius: 6px; font-size: .9rem; font-family: inherit;
+    background: white; color: #333;
+  }
+  input:focus, select:focus, textarea:focus { outline: 2px solid #3498db; border-color: transparent; }
+
+  button {
+    padding: 8px 14px; border: none; border-radius: 6px;
+    background: #3498db; color: white; cursor: pointer;
+    font-weight: 600; font-size: .9rem; transition: .15s;
+  }
+  button:hover { filter: brightness(0.92); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.secondary { background: #95a5a6; }
+  button.success   { background: #27ae60; }
+  button.danger    { background: #e74c3c; }
+  button.small     { padding: 4px 10px; font-size: .78rem; }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  th, td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; font-size: .88rem; }
+  th { background: #f8f9fa; font-weight: 600; color: #555; }
+  td input { padding: 4px 6px; font-size: .85rem; }
+
+  .totales { margin-top: 15px; text-align: right; font-size: .95rem; }
+  .totales div { padding: 4px 0; }
+  .totales .total { font-size: 1.2rem; font-weight: 700; color: #27ae60; border-top: 2px solid #eee; padding-top: 8px; margin-top: 8px; }
+
+  .status { padding: 10px 14px; border-radius: 6px; margin-bottom: 15px; font-size: .9rem; display: none; }
+  .status.ok  { background: #d4edda; color: #155724; border-left: 4px solid #27ae60; display: block; }
+  .status.err { background: #f8d7da; color: #721c24; border-left: 4px solid #e74c3c; display: block; }
+  .status.info{ background: #d1ecf1; color: #0c5460; border-left: 4px solid #17a2b8; display: block; }
+
+  /* -- Lector QR -- */
+  .qr-panel {
+    background: #1a1a2e;
+    color: white;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    display: none;
+  }
+  .qr-panel.show { display: block; }
+  .qr-panel h3 { margin-bottom: 12px; color: #00d9ff; }
+  #qrReader {
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto 15px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #000;
+    border: 3px solid #00d9ff;
+  }
+  .qr-info {
+    text-align: center;
+    font-size: .85rem;
+    color: #aaa;
+    margin-top: 10px;
+  }
+  .qr-resultado {
+    background: #00d9ff;
+    color: #1a1a2e;
+    padding: 12px 20px;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin-top: 12px;
+    display: none;
+  }
+  .qr-resultado.show { display: block; }
+  .qr-resultado.error { background: #e74c3c; color: white; }
+
+  .manual-codigo {
+    display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px;
+  }
+  .manual-codigo > div { flex: 1; }
+
+  #preview { display: none; }
+  #preview.show { display: block; }
+
+  @media print {
+    body * { visibility: hidden; }
+    #preview, #preview * { visibility: visible; }
+    #preview { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; }
+    .no-print { display: none !important; }
+  }
+
+  .comprobante { border: 1px solid #999; padding: 25px; font-family: 'Courier New', monospace; font-size: .9rem; }
+  .comprobante .cabecera { text-align: center; border-bottom: 2px dashed #333; padding-bottom: 12px; margin-bottom: 15px; }
+  .comprobante .cabecera h3 { font-size: 1.3rem; margin-bottom: 4px; }
+  .comprobante .tipo { display: inline-block; background: #2c3e50; color: white; padding: 4px 12px; border-radius: 4px; margin: 8px 0; font-weight: 700; letter-spacing: 1px; }
+  .comprobante .info { margin: 10px 0; }
+  .comprobante .info p { margin: 3px 0; }
+  .comprobante .firma { margin-top: 40px; display: flex; justify-content: space-between; gap: 20px; }
+  .comprobante .firma div { flex: 1; border-top: 1px solid #333; padding-top: 4px; text-align: center; font-size: .8rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="no-print">
+    <div>
+      <h1>?? Facturador — Tienda Doña María</h1>
+      <small>NIT 123456789-0 · Calle 45 #12-34 · Tel. 3001234567</small>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="secondary" onclick="cargarTodo()">?? Recargar datos</button>
+      <button class="secondary" onclick="probarFirebase()">?? Probar Firebase</button>
+    </div>
+  </header>
+
+  <div id="status" class="status info">? Iniciando... conectando con Firebase.</div>
+
+  <!-- ----------- LECTOR QR ----------- -->
+  <div class="card no-print">
+    <h2>?? Lector de QR / Código de barras</h2>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px">
+      <button class="success" id="btnEscanear" onclick="iniciarEscaner()">?? Iniciar cámara</button>
+      <button class="danger" id="btnDetener" onclick="detenerEscaner()" style="display:none">?? Detener cámara</button>
+    </div>
+
+    <div class="qr-panel" id="qrPanel">
+      <h3>?? Escaneando... apunta al código del producto</h3>
+      <div id="qrReader"></div>
+      <p class="qr-info">El código se detectará automáticamente y se agregará a la factura.</p>
+      <div class="qr-resultado" id="qrResultado"></div>
+    </div>
+
+    <div class="manual-codigo">
+      <div>
+        <label>O ingresa el código manualmente</label>
+        <input id="codigoManual" type="text" placeholder="Ej: 7701234567890">
+      </div>
+      <button onclick="buscarPorCodigo($('codigoManual').value)">?? Buscar</button>
+    </div>
+  </div>
+
+  <!-- ----------- OPCIÓN A: PEGAR JSON ----------- -->
+  <div class="card no-print">
+    <h2>?? Opción A: Pegar JSON de una factura existente</h2>
+    <textarea id="jsonInput" rows="5" placeholder='Pega aquí el JSON de una factura completa...'></textarea>
+    <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
+      <button onclick="cargarDesdeJSON()">?? Cargar JSON</button>
+      <button class="secondary" onclick="cargarEjemplo()">?? Cargar ejemplo</button>
+      <button class="danger" onclick="limpiarTodo()">??? Limpiar</button>
+    </div>
+  </div>
+
+  <!-- ----------- OPCIÓN B: ARMAR FACTURA ----------- -->
+  <div class="card no-print">
+    <h2>?? Opción B: Armar factura manualmente</h2>
+
+    <div style="margin-bottom:15px">
+      <label>?? Cliente (por ID, desde Firebase)</label>
+      <select id="clienteSelect" onchange="seleccionarCliente()">
+        <option value="">? Cargando clientes...</option>
+      </select>
+    </div>
+
+    <div class="grid-3">
+      <div><label>ID</label><input id="clienteId" type="text"></div>
+      <div><label>Nombre</label><input id="clienteNombre" type="text"></div>
+      <div><label>Documento</label><input id="clienteDocumento" type="text"></div>
+      <div><label>Teléfono</label><input id="clienteTelefono" type="text"></div>
+      <div><label>Dirección</label><input id="clienteDireccion" type="text"></div>
+      <div><label>Email</label><input id="clienteEmail" type="text"></div>
+    </div>
+  </div>
+
+  <!-- Productos -->
+  <div class="card no-print">
+    <h2>?? Productos de inventario</h2>
+
+    <div class="grid-2" style="margin-bottom:15px">
+      <div>
+        <label>Seleccionar producto (por ID)</label>
+        <select id="productoSelect" onchange="seleccionarProducto()">
+          <option value="">? Cargando productos...</option>
+        </select>
+      </div>
+      <div>
+        <label>Cantidad</label>
+        <input id="productoCantidad" type="number" value="1" min="1">
+      </div>
+    </div>
+
+    <button class="success" onclick="agregarProducto()">? Agregar a la factura</button>
+
+    <table id="tablaItems">
+      <thead>
+        <tr>
+          <th>Producto</th>
+          <th style="width:80px">Cant.</th>
+          <th style="width:120px">Vr. Unit.</th>
+          <th style="width:120px">Subtotal</th>
+          <th style="width:60px"></th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <div class="totales">
+      <div>Subtotal: <strong id="subtotal">$0</strong></div>
+      <div>IVA (19%): <strong id="iva">$0</strong></div>
+      <div class="total">TOTAL: <span id="total">$0</span></div>
+    </div>
+  </div>
+
+  <div class="card no-print" style="text-align:center">
+    <button class="success" onclick="generarFactura()" style="padding:14px 40px;font-size:1rem">
+      ??? Generar factura
+    </button>
+  </div>
+
+  <!-- PREVIEW -->
+  <div id="preview">
+    <div class="comprobante" id="comprobanteContenido"></div>
+    <div class="no-print" style="text-align:center;margin-top:20px;padding:15px">
+      <button class="success" style="padding:12px 30px;font-size:1rem" onclick="window.print()">??? Imprimir / PDF</button>
+      <button class="secondary" style="padding:12px 30px;margin-left:10px;font-size:1rem" onclick="cerrarPreview()">? Cerrar</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ----------- LIBRERÍA QR ----------- -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<script>
+// --------------------------------------------------------------
+// CONFIG
+// --------------------------------------------------------------
+const URL_CLIENTES   = 'https://jc-web-15-default-rtdb.firebaseio.com/tienda/clientes.json';
+const URL_INVENTARIO = 'https://jc-web-15-default-rtdb.firebaseio.com/tienda/inventario.json';
+
+const TIENDA = {
+  nombre: 'Tienda Doña María',
+  nit: '123456789-0',
+  direccion: 'Calle 45 #12-34, Barrio El Prado',
+  telefono: '3001234567',
+  email: 'tiendadonamaria@email.com'
+};
+const IVA_PORCENTAJE = 0.19;
+
+let clientesCache   = [];
+let inventarioCache = [];
+let itemsFactura    = [];
+let qrScanner       = null;   // instancia del escáner
+let qrActivo        = false;
+let ultimoCodigo    = '';
+let ultimoTiempo    = 0;
+
+// --------------------------------------------------------------
+// UTILIDADES
+// --------------------------------------------------------------
+const $ = id => document.getElementById(id);
+const fmt = n => '$' + Number(n || 0).toLocaleString('es-CO', { minimumFractionDigits: 0 });
+
+function mostrarStatus(msg, tipo = 'ok') {
+  const el = $('status');
+  el.textContent = msg;
+  el.className = 'status ' + tipo;
+  if (tipo !== 'info') {
+    clearTimeout(window._st);
+    window._st = setTimeout(() => el.style.display = 'none', 5000);
+  }
+}
+
+function mostrarResultadoQR(msg, ok = true) {
+  const el = $('qrResultado');
+  el.textContent = msg;
+  el.className = 'qr-resultado show' + (ok ? '' : ' error');
+  setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+// --------------------------------------------------------------
+// CARGAR CLIENTES + INVENTARIO
+// --------------------------------------------------------------
+async function cargarTodo() {
+  mostrarStatus('? Cargando clientes y productos desde Firebase...', 'info');
+  await Promise.all([cargarClientes(), cargarInventario()]);
+  mostrarStatus(`? ${clientesCache.length} cliente(s) y ${inventarioCache.length} producto(s) cargados.`, 'ok');
+}
+
+async function cargarClientes() {
+  const select = $('clienteSelect');
+  select.innerHTML = '<option value="">? Cargando...</option>';
+  try {
+    const res = await fetch(URL_CLIENTES, { cache: 'no-store' });
+    const data = await res.json();
+    clientesCache = Array.isArray(data) ? data : Object.values(data || {});
+    select.innerHTML = '<option value="">— Seleccione un cliente —</option>';
+    clientesCache
+      .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+      .forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        const doc = c.tipo_documento && c.numero_documento ? ` — ${c.tipo_documento} ${c.numero_documento}` : '';
+        opt.textContent = `${c.id} — ${c.nombre || ''}${doc}`;
+        select.appendChild(opt);
+      });
+  } catch (err) {
+    console.error('Error clientes:', err);
+    select.innerHTML = '<option value="">? Error al cargar clientes</option>';
+  }
+}
+
+async function cargarInventario() {
+  const select = $('productoSelect');
+  select.innerHTML = '<option value="">? Cargando...</option>';
+  try {
+    const res = await fetch(URL_INVENTARIO, { cache: 'no-store' });
+    const data = await res.json();
+    inventarioCache = Array.isArray(data) ? data : Object.values(data || {});
+
+    select.innerHTML = '<option value="">— Seleccione un producto —</option>';
+    inventarioCache
+      .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+      .forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = `${p.id} — ${p.nombre || ''} (${fmt(p.precio_venta)}) · Stock: ${p.stock_actual ?? '?'}`;
+        select.appendChild(opt);
+      });
+    console.log('? Inventario:', inventarioCache);
+  } catch (err) {
+    console.error('Error inventario:', err);
+    select.innerHTML = '<option value="">? Error al cargar inventario</option>';
+  }
+}
+
+// --------------------------------------------------------------
+// LECTOR QR / CÓDIGO DE BARRAS
+// --------------------------------------------------------------
+async function iniciarEscaner() {
+  $('qrPanel').classList.add('show');
+  $('btnEscanear').style.display = 'none';
+  $('btnDetener').style.display = 'inline-block';
+
+  try {
+    qrScanner = new Html5Qrcode("qrReader");
+    qrActivo  = true;
+
+    await qrScanner.start(
+      { facingMode: "environment" },  // cámara trasera
+      {
+        fps: 10,
+        qrbox: { width: 250, height: 250 }
+      },
+      (codigo) => onCodigoDetectado(codigo),
+      (err) => { /* ignorar errores de frame */ }
+    );
+
+    mostrarResultadoQR('?? Cámara activa. Apunta al código.');
+  } catch (err) {
+    console.error('Error cámara:', err);
+    mostrarResultadoQR('? No se pudo iniciar la cámara: ' + err.message, false);
+    detenerEscaner();
+  }
+}
+
+async function detenerEscaner() {
+  if (qrScanner && qrActivo) {
+    try {
+      await qrScanner.stop();
+      await qrScanner.clear();
+    } catch (e) { /* ignorar */ }
+  }
+  qrActivo = false;
+  qrScanner = null;
+  $('qrPanel').classList.remove('show');
+  $('btnEscanear').style.display = 'inline-block';
+  $('btnDetener').style.display = 'none';
+  $('qrResultado').classList.remove('show');
+  ultimoCodigo = '';
+}
+
+function onCodigoDetectado(codigo) {
+  // Evitar duplicados en menos de 2 segundos
+  const ahora = Date.now();
+  if (codigo === ultimoCodigo && (ahora - ultimoTiempo) < 2000) return;
+  ultimoCodigo = codigo;
+  ultimoTiempo = ahora;
+
+  // Vibración para confirmar (móvil)
+  if (navigator.vibrate) navigator.vibrate(200);
+
+  buscarPorCodigo(codigo);
+}
+
+// --------------------------------------------------------------
+// BUSCAR PRODUCTO POR CÓDIGO DE BARRAS O ID
+// --------------------------------------------------------------
+function buscarPorCodigo(codigo) {
+  codigo = String(codigo || '').trim();
+  if (!codigo) {
+    mostrarResultadoQR('?? Código vacío.', false);
+    return;
+  }
+
+  // Buscar en inventario por codigo_barras, id o código QR
+  const prod = inventarioCache.find(p =>
+    String(p.codigo_barras) === codigo ||
+    String(p.id) === codigo ||
+    String(p.codigo_qr) === codigo
+  );
+
+  if (!prod) {
+    mostrarResultadoQR(`? Producto no encontrado: ${codigo}`, false);
+    $('codigoManual').value = '';
+    return;
+  }
+
+  // Verificar stock
+  if (prod.stock_actual != null && prod.stock_actual <= 0) {
+    mostrarResultadoQR(`?? "${prod.nombre}" sin stock disponible.`, false);
+    return;
+  }
+
+  // Agregar automáticamente a la factura (cantidad 1)
+  const existente = itemsFactura.find(i => i.id === prod.id);
+  if (existente) {
+    existente.cantidad += 1;
+  } else {
+    itemsFactura.push({
+      id: prod.id,
+      nombre: prod.nombre,
+      cantidad: 1,
+      precio_unitario: prod.precio_venta,
+      aplica_iva: !!prod.aplica_iva
+    });
+  }
+
+  renderItems();
+  mostrarResultadoQR(`? ${prod.nombre} — ${fmt(prod.precio_venta)} agregado`);
+  $('codigoManual').value = '';
+}
+
+// Enter en el campo manual
+document.addEventListener('DOMContentLoaded', () => {
+  const input = $('codigoManual');
+  if (input) {
+    input.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        buscarPorCodigo(input.value);
+      }
+    });
+  }
+});
+
+// --------------------------------------------------------------
+// SELECCIÓN DE CLIENTE
+// --------------------------------------------------------------
+function seleccionarCliente() {
+  const id = $('clienteSelect').value;
+  if (!id) {
+    ['clienteId','clienteNombre','clienteDocumento','clienteTelefono','clienteDireccion','clienteEmail']
+      .forEach(k => $(k).value = '');
+    return;
+  }
+  const c = clientesCache.find(x => x.id === id);
+  if (!c) return;
+  $('clienteId').value        = c.id || '';
+  $('clienteNombre').value    = c.nombre || '';
+  $('clienteDocumento').value = `${c.tipo_documento || ''} ${c.numero_documento || ''}`.trim();
+  $('clienteTelefono').value  = c.telefono || '';
+  $('clienteDireccion').value = c.direccion || '';
+  $('clienteEmail').value     = c.email || '';
+  mostrarStatus(`? Cliente "${c.nombre}" cargado.`, 'ok');
+}
+
+// --------------------------------------------------------------
+// PRODUCTOS
+// --------------------------------------------------------------
+function seleccionarProducto() {
+  const id = $('productoSelect').value;
+  if (!id) return;
+  $('productoCantidad').value = 1;
+}
+
+function agregarProducto() {
+  const id = $('productoSelect').value;
+  if (!id) { mostrarStatus('?? Selecciona un producto.', 'err'); return; }
+
+  const p = inventarioCache.find(x => x.id === id);
+  if (!p) { mostrarStatus('?? Producto no encontrado.', 'err'); return; }
+
+  const cant = parseInt($('productoCantidad').value) || 1;
+  if (cant <= 0) { mostrarStatus('?? Cantidad inválida.', 'err'); return; }
+
+  const existente = itemsFactura.find(i => i.id === p.id);
+  if (existente) {
+    existente.cantidad += cant;
+  } else {
+    itemsFactura.push({
+      id: p.id,
+      nombre: p.nombre,
+      cantidad: cant,
+      precio_unitario: p.precio_venta,
+      aplica_iva: !!p.aplica_iva
+    });
+  }
+
+  renderItems();
+  mostrarStatus(`? "${p.nombre}" agregado (${cant} × ${fmt(p.precio_venta)}).`, 'ok');
+}
+
+// --------------------------------------------------------------
+// RENDER TABLA
+// --------------------------------------------------------------
+function renderItems() {
+  const tbody = $('tablaItems').querySelector('tbody');
+  tbody.innerHTML = '';
+
+  itemsFactura.forEach((it, idx) => {
+    const tr = document.createElement('tr');
+    const sub = it.cantidad * it.precio_unitario;
+    tr.innerHTML = `
+      <td>${it.nombre}</td>
+      <td><input type="number" class="cant" value="${it.cantidad}" min="1" onchange="cambiarCantidad(${idx}, this.value)"></td>
+      <td>${fmt(it.precio_unitario)}</td>
+      <td><strong>${fmt(sub)}</strong></td>
+      <td><button class="danger small" onclick="quitarItem(${idx})">?</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  recalcular();
+}
+
+function cambiarCantidad(idx, valor) {
+  const c = parseInt(valor) || 1;
+  if (c <= 0) return;
+  itemsFactura[idx].cantidad = c;
+  renderItems();
+}
+
+function quitarItem(idx) {
+  itemsFactura.splice(idx, 1);
+  renderItems();
+}
+
+function recalcular() {
+  let subtotal = 0, iva = 0;
+  itemsFactura.forEach(it => {
+    const sub = it.cantidad * it.precio_unitario;
+    subtotal += sub;
+    if (it.aplica_iva) iva += sub * IVA_PORCENTAJE;
+  });
+  $('subtotal').textContent = fmt(subtotal);
+  $('iva').textContent      = fmt(iva);
+  $('total').textContent    = fmt(subtotal + iva);
+}
+
+// --------------------------------------------------------------
+// GENERAR FACTURA
+// --------------------------------------------------------------
+function generarFactura() {
+  if (!$('clienteNombre').value.trim()) {
+    mostrarStatus('?? Selecciona un cliente.', 'err'); return;
+  }
+  if (itemsFactura.length === 0) {
+    mostrarStatus('?? Agrega al menos un producto.', 'err'); return;
+  }
+
+  const numero = 'FAC-' + Date.now().toString().slice(-6);
+  const fecha  = new Date().toLocaleString('es-CO');
+
+  let subtotal = 0, iva = 0;
+  const items = itemsFactura.map(it => {
+    const sub   = it.cantidad * it.precio_unitario;
+    const ivaIt = it.aplica_iva ? sub * IVA_PORCENTAJE : 0;
+    subtotal += sub; iva += ivaIt;
+    return { ...it, subtotal: sub, iva: ivaIt };
+  });
+
+  const html = `
+    <div class="cabecera">
+      <h3>${TIENDA.nombre}</h3>
+      <p>NIT: ${TIENDA.nit}</p>
+      <p>${TIENDA.direccion}</p>
+      <p>Tel: ${TIENDA.telefono} · ${TIENDA.email}</p>
+      <div class="tipo">FACTURA DE COMPRA</div>
+      <p><strong>N° ${numero}</strong></p>
+      <p>Fecha: ${fecha}</p>
+    </div>
+    <div class="info">
+      <p><strong>ID:</strong> ${$('clienteId').value || '—'}</p>
+      <p><strong>Cliente:</strong> ${$('clienteNombre').value}</p>
+      <p><strong>Documento:</strong> ${$('clienteDocumento').value || '—'}</p>
+      <p><strong>Dirección:</strong> ${$('clienteDireccion').value || '—'}</p>
+      <p><strong>Teléfono:</strong> ${$('clienteTelefono').value || '—'}</p>
+      <p><strong>Email:</strong> ${$('clienteEmail').value || '—'}</p>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Producto</th><th>Cant.</th><th>Vr. Unit.</th><th>Subtotal</th></tr>
+      </thead>
+      <tbody>
+        ${items.map(i => `
+          <tr>
+            <td>${i.nombre}</td>
+            <td style="text-align:center">${i.cantidad}</td>
+            <td style="text-align:right">${fmt(i.precio_unitario)}</td>
+            <td style="text-align:right">${fmt(i.subtotal)}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+    <div style="text-align:right;margin-top:12px;font-size:.95rem">
+      <p>Subtotal: <strong>${fmt(subtotal)}</strong></p>
+      <p>IVA (19%): <strong>${fmt(iva)}</strong></p>
+      <p style="font-size:1.15rem;border-top:1px solid #333;padding-top:6px;margin-top:6px">
+        <strong>TOTAL: ${fmt(subtotal + iva)}</strong>
+      </p>
+    </div>
+    <div class="firma">
+      <div>Firma del cliente</div>
+      <div>Firma del vendedor</div>
+    </div>
+  `;
+
+  $('comprobanteContenido').innerHTML = html;
+  $('preview').classList.add('show');
+  $('preview').scrollIntoView({ behavior: 'smooth' });
+  mostrarStatus(`? Factura ${numero} generada.`, 'ok');
+}
+
+function cerrarPreview() {
+  $('preview').classList.remove('show');
+}
+
+// --------------------------------------------------------------
+// CARGAR DESDE JSON
+// --------------------------------------------------------------
+function cargarDesdeJSON() {
+  const txt = $('jsonInput').value.trim();
+  if (!txt) { mostrarStatus('?? Pega un JSON.', 'err'); return; }
+
+  let f;
+  try { f = JSON.parse(txt); }
+  catch (e) { mostrarStatus('? JSON inválido: ' + e.message, 'err'); return; }
+
+  if (!f.numero_factura || !Array.isArray(f.items)) {
+    mostrarStatus('?? JSON debe tener "numero_factura" y "items".', 'err'); return;
+  }
+
+  if (f.cliente) {
+    $('clienteId').value        = f.cliente.id || '';
+    $('clienteNombre').value    = f.cliente.nombre || '';
+    $('clienteDocumento').value = f.cliente.documento || f.cliente.numero_documento || '';
+    $('clienteTelefono').value  = f.cliente.telefono || '';
+    $('clienteDireccion').value = f.cliente.direccion || '';
+    $('clienteEmail').value     = f.cliente.email || '';
+  }
+
+  itemsFactura = f.items.map(i => ({
+    id: i.id_producto || i.id || '',
+    nombre: i.nombre || i.descripcion || '',
+    cantidad: i.cantidad || 1,
+    precio_unitario: i.precio_unitario || 0,
+    aplica_iva: (i.iva || 0) > 0
+  }));
+
+  renderItems();
+  mostrarStatus(`? Factura ${f.numero_factura} cargada con ${itemsFactura.length} item(s).`, 'ok');
+}
+
+function cargarEjemplo() {
+  const ej = {
+    numero_factura: "FAC-1001",
+    fecha: "2025-01-15T10:30:00",
+    cliente: {
+      id: "CLI-001", nombre: "Juan Pérez", documento: "CC 1020304050",
+      direccion: "Calle 50 #10-20", telefono: "3105556677", email: "juanperez@email.com"
+    },
+    items: [
+      { id_producto: "PROD-001", nombre: "Arroz Diana 1kg", cantidad: 2, precio_unitario: 3800, subtotal: 7600, iva: 0 },
+      { id_producto: "PROD-005", nombre: "Gaseosa 1.5L", cantidad: 1, precio_unitario: 5000, subtotal: 5000, iva: 950 }
+    ],
+    total: 13550
+  };
+  $('jsonInput').value = JSON.stringify(ej, null, 2);
+  mostrarStatus('?? Ejemplo cargado. Presiona "Cargar JSON".', 'ok');
+}
+
+function limpiarTodo() {
+  $('jsonInput').value = '';
+  $('clienteSelect').value = '';
+  ['clienteId','clienteNombre','clienteDocumento','clienteTelefono','clienteDireccion','clienteEmail']
+    .forEach(k => $(k).value = '');
+  itemsFactura = [];
+  renderItems();
+  cerrarPreview();
+  mostrarStatus('??? Todo limpiado.', 'ok');
+}
+
+// --------------------------------------------------------------
+// DIAGNÓSTICO
+// --------------------------------------------------------------
+async function probarFirebase() {
+  const resultados = [];
+  for (const [nombre, url] of [['Clientes', URL_CLIENTES], ['Inventario', URL_INVENTARIO]]) {
+    try {
+      const r = await fetch(url, { cache: 'no-store' });
+      const d = await r.json();
+      const n = Array.isArray(d) ? d.length : Object.keys(d || {}).length;
+      resultados.push(`? ${nombre}: HTTP ${r.status}, ${n} registro(s)`);
+    } catch (e) {
+      resultados.push(`? ${nombre}: ${e.message}`);
+    }
+  }
+  alert(resultados.join('\n'));
+}
+
+// --------------------------------------------------------------
+// INIT
+// --------------------------------------------------------------
+window.addEventListener('DOMContentLoaded', cargarTodo);
+</script>
+</body>
+</html>
